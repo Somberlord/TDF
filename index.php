@@ -26,10 +26,14 @@ function save_league_data()
 	fclose($fp);
 }
 
-function set_boolean_data(key, value) 
+function set_custom_data($key, $value)
 {
-	$json_user_data[key] = value ? "yes" : "no";
+	$json_user_data[$key] = $value;
 	save_league_data();
+}
+function set_boolean_data($key, $value) 
+{
+	$set_custom_data($key, $value ? "Yes" : "No");
 }
 
 class Player
@@ -346,39 +350,20 @@ if(isset($_POST['admin']))
 			$htmlData .= '<p><button class="pushable" type="submit"><span class="front">Save Name</span></button></p>';
 			$htmlData .= '</form>';
 			
-			$resistances = False;
-			if(isset($_POST['resistances']))
-			{
-				$resistances = $_POST['resistances'] == 'Yes';
-				set_boolean_data("resistances", $resistances)
-			}
-			else
-			{
-				if(isset($_POST['hidden_res'])) {
-					set_boolean_data("resistances", False);
-				}
-				else 
-				{
-					$resistances = ($json_user_data["resistances"] ?? 'No' == 'Yes');
-				}
-			}
+			// Process whether resistances and roundstanding must be displayed
+			// Update values in configuration as necessary
+			$is_update_admin = isset($_POST['hidden_res']);
+			$post_resistances = $_POST['resistances'] ?? 'No' == 'Yes';
+			$json_resistances = $json_user_data["resistances"] ?? 'No' == 'Yes';
 
-			$roundstanding = False;
-			if(isset($_POST['roundstanding']))
-			{
-				$roundstanding = $_POST['roundstanding'] == 'Yes';
-				set_boolean_data("roundstanding", $roundstanding)
-			}
-			else
-			{
-				if(isset($_POST['hidden_res'])) {
-					set_boolean_data("roundstanding", False);
-				}
-				else 
-				{
-					$roundstanding = ($json_user_data["roundstanding"] ?? 'No' == 'Yes');
-				}
-			}
+			$resistances = $post_resistances || (!$is_update_admin && $json_resistances);
+			set_boolean_data("resistances", $resistances);
+
+			$post_roundstanding = $_POST['roundstanding'] ?? 'No' == 'Yes';
+			$json_roundstanding = $json_user_data["roundstanding"] ?? 'No' == 'Yes';
+
+			$roundstanding = $post_roundstanding || (!$is_update_admin && $json_roundstanding);
+			set_boolean_data("roundstanding", $roundstanding);
 			
 			$htmlData .= '<form action="" method="post" id="resistances_form" class="adminforms">';
 			$htmlData .= '<input name="admin" value="" hidden>';
@@ -402,18 +387,7 @@ if(isset($_POST['admin']))
 			
 			if(isset($_POST['leaguename']))
 			{
-				if(file_exists($user_data))
-				{
-					$jsonData = json_decode(file_get_contents($user_data), true);
-				}
-				else
-				{
-					$jsonData = array();
-				}
-				$jsonData["leaguename"] = $_POST['leaguename'];
-				$fp = fopen($user_data, 'w');
-				fwrite($fp, json_encode($jsonData, JSON_PRETTY_PRINT));
-				fclose($fp);
+				set_custom_data("leaguename", $_POST['leaguename']);
 			}
 			
 			$htmlData .= '<form action="" method="post" id="changecolor_form" class="adminforms">';
@@ -422,19 +396,8 @@ if(isset($_POST['admin']))
 			if(isset($_POST['color']))
 			{
 				$colors = explode("|", $_POST['color']);
-				if(file_exists($user_data))
-				{
-					$jsonData = json_decode(file_get_contents($user_data), true);
-				}
-				else
-				{
-					$jsonData = array();
-				}
-				$jsonData["color1"] = $colors[0];
-				$jsonData["color2"] = $colors[1];
-				$fp = fopen($user_data, 'w');
-				fwrite($fp, json_encode($jsonData, JSON_PRETTY_PRINT));
-				fclose($fp);
+				set_custom_data("color1", $colors[0]);
+				set_custom_data("color2", $colors[1]);
 			}
 			$htmlData .= '<p><button class="pushable" type="submit" name="color" style="background:#228B22;" value="#228B22|#20B2AA"><span class="front" style="background:#20B2AA;"></span></button></p>';
 			$htmlData .= '<p><button class="pushable" type="submit" name="color" style="background:#c1d5f8;" value="#c1d5f8|#6495ED"><span class="front" style="background:#6495ED;"></span></button></p>';
@@ -750,31 +713,9 @@ if(isset($_POST['current']) || isset($_POST['archives']))
 			
 			$nbPods = sizeof($xml->pods->pod);
 			
-			$shopName = '';
-			$roundstanding = False;
-			$resistances = False;
-			if(file_exists($user_data))
-			{
-				$jsonData = json_decode(file_get_contents($user_data), true);
-				if (array_key_exists("leaguename",$jsonData))
-				{
-					$shopName = $jsonData['leaguename'];
-				}
-				if (array_key_exists("roundstanding",$jsonData))
-				{
-					if($jsonData['roundstanding'] == 'Yes')
-					{
-						$roundstanding = True;
-					}
-				}
-				if (array_key_exists("resistances",$jsonData))
-				{
-					if($jsonData['resistances'] == 'Yes')
-					{
-						$resistances = True;
-					}
-				}
-			}
+			$shopName = $json_roundstanding['leaguename'] ?? '';
+			$roundstanding = $json_roundstanding['roundstanding'] ?? 'No' == 'Yes';
+			$resistances = $json_roundstanding['resistances'] ?? 'No' == 'Yes';
 			$pageTitle = $unprotectedName;
 			$tournamentTitle = $xml->data->name;
 			
@@ -806,19 +747,20 @@ if(isset($_POST['current']) || isset($_POST['archives']))
 				$htmlData .= '<button class="tablinks" onclick="openTab(event, \'Players\')" id="defaultOpen">Players</button>';
 				for($pod = 0; $pod < $nbPods; $pod++)
 				{
-					if($xml->pods->pod[$pod]["category"] == 0)
+					$current_pod_category = $xml->pods->pod[$pod]["category"];
+					if($current_pod_category == 0)
 						$podName = 'Juniors';
-					if($xml->pods->pod[$pod]["category"] == 1)
+					if($current_pod_category == 1)
 						$podName = 'Seniors';
-					if($xml->pods->pod[$pod]["category"] == 2)
+					if($current_pod_category == 2)
 						$podName = 'Masters';
-					if($xml->pods->pod[$pod]["category"] == 9)
+					if($current_pod_category == 9)
 						$podName = 'Seniors & Masters';
-					if($xml->pods->pod[$pod]["category"] == 8)
+					if($current_pod_category == 8)
 						$podName = 'Juniors & Seniors';
-					if($xml->pods->pod[$pod]["category"] == 10)
+					if($current_pod_category == 10)
 						$podName = 'Juniors & Seniors & Masters';
-					$definedPods[] = $xml->pods->pod[$pod]["category"];
+					$definedPods[] = $current_pod_category;
 					$htmlData .= '<button class="tablinks" onclick="openTab(event, \'P'.$pod.'\')">'.$podName.'</button>';
 				}
 			$htmlData .= '</div>';
@@ -849,6 +791,7 @@ if(isset($_POST['current']) || isset($_POST['archives']))
 				$nbPlayers = sizeof($xml->players->player);
 				for($p = 0; $p < $nbPlayers; $p++)
 				{
+					$current_player = $xml->players->player[$p];
 					$htmlData .= '<tr>';
 					/*$htmlData .= '<td>';
 					$htmlData .= $xml->players->player[$p]['userid'];
@@ -856,7 +799,7 @@ if(isset($_POST['current']) || isset($_POST['archives']))
 					$htmlData .= '<td>';
 					//if(intval(explode('/', $xml->players->player[$p]->birthdate)[sizeof(explode('/', $xml->players->player[$p]->birthdate))-1]) > 2007)
 					//{
-						$htmlData .= $xml->players->player[$p]->lastname;
+						$htmlData .= $current_player->lastname;
 					//}
 					//else
 					//{
@@ -864,24 +807,24 @@ if(isset($_POST['current']) || isset($_POST['archives']))
 					//}
 					$htmlData .= '</td>';
 					$htmlData .= '<td>';
-					$htmlData .= $xml->players->player[$p]->firstname;
+					$htmlData .= $current_player->firstname;
 					$htmlData .= '</td>';
 					$htmlData .= '</tr>';
 					
-					$key = $xml->players->player[$p]['userid'];
+					$current_userid = strval($current_player['userid']);
 					
-					$playersFirstnames[strval($key)] = $xml->players->player[$p]->firstname;
+					$playersFirstnames[$current_userid] = $current_player->firstname;
 					//if(intval(explode('/', $xml->players->player[$p]->birthdate)[sizeof(explode('/', $xml->players->player[$p]->birthdate))-1]) > 2007)
 					//{
-						$playersLastnames[strval($key)] = $xml->players->player[$p]->lastname;
+						$playersLastnames[$current_userid] = $current_player->lastname;
 					//}
 					//else
 					//{
 					//	$playersLastnames[strval($key)] = $xml->players->player[$p]->lastname[0];
 					//}
 					
-					$players[strval($key)] = new Player();
-					$players[strval($key)]->name = $playersFirstnames[strval($key)].' '.$playersLastnames[strval($key)];
+					$players[$current_userid] = new Player();
+					$players[$current_userid]->name = $playersFirstnames[$current_userid].' '.$playersLastnames[$current_userid];
 				}
 				$htmlData .= '</table>';
 			$htmlData .= '</div>';
@@ -890,15 +833,16 @@ if(isset($_POST['current']) || isset($_POST['archives']))
 			
 			for($pod = 0; $pod < $nbPods; $pod++)
 			{
+				$current_pod = $xml->pods->pod[$pod];
 				$htmlData .= '<div id="P'.$pod.'" class="tabcontent">';
 				$nbTopCutPlayers = 0;
 				$topCutLevel = 0;
-				$nbRounds = sizeof($xml->pods->pod[$pod]->rounds->round);
+				$nbRounds = sizeof($current_pod->rounds->round);
 				$htmlData .= '<div class="tab">';
 				for($r = 1; $r <= $nbRounds; $r++)
 				{
 					$htmlData .= '<button class="';
-					if($xml->pods->pod[$pod]->rounds->round[$r-1]['type'] == 1)
+					if($current_pod->rounds->round[$r-1]['type'] == 1)
 					{
 						$htmlData .= 'topcut ';
 					}
@@ -912,10 +856,10 @@ if(isset($_POST['current']) || isset($_POST['archives']))
 				$htmlData .= '<button class="tablinks subtablinks" onclick="subopenTab(event, \'S'.$pod.'\')">Standings</button>';
 				$htmlData .= '</div>';
 					
-				$nbPodPlayers = sizeof($xml->pods->pod[$pod]->subgroups->subgroup->players->player);
+				$nbPodPlayers = sizeof($current_pod->subgroups->subgroup->players->player);
 				$podPlayersID = array();
 				for($pl = 0; $pl < $nbPodPlayers; $pl++)
-					$podPlayersID[] = strval($xml->pods->pod[$pod]->subgroups->subgroup->players->player[$pl]['userid']);
+					$podPlayersID[] = strval($current_pod->subgroups->subgroup->players->player[$pl]['userid']);
 				
 				$nbTCRows = 0;
 				$nbTCColumns = 0;
@@ -924,14 +868,15 @@ if(isset($_POST['current']) || isset($_POST['archives']))
 				{
 					//rounds data
 					$round = $r - 1;
+					$current_round = $current_pod->rounds->round[$round];
 					$htmlData .= '<div id="R'.$pod.'_'.$r.'" class="tabcontent subcontent">';
-					if($xml->pods->pod[$pod]->rounds->round[$round]['type'] == 1)
+					if($current_round['type'] == 1)
 					{
 						$htmlData .= '<div class="topcut_table"><table>';
 						if($nbTopCutPlayers == 0)
 						{
-							$nbTopCutPlayers = sizeof($xml->pods->pod[$pod]->rounds->round[$round]->matches->match) * 2;
-							$nbTCRows = sizeof($xml->pods->pod[$pod]->rounds->round[$round]->matches->match);
+							$nbTopCutPlayers = sizeof($current_round->matches->match) * 2;
+							$nbTCRows = sizeof($current_round->matches->match);
 							$nbTCColumns = $nbTopCutPlayers - 1;
 							$topCutStartRound = $round;
 						}
@@ -1004,14 +949,15 @@ if(isset($_POST['current']) || isset($_POST['archives']))
 							$htmlData .= '</td>';
 							$htmlData .= '</tr>';
 							
-							$p1 = strval($xml->pods->pod[$pod]->rounds->round[$topCutStartRound]->matches->match[0]->player1['userid']);
-							$p2 = strval($xml->pods->pod[$pod]->rounds->round[$topCutStartRound]->matches->match[3]->player1['userid']);
-							$p3 = strval($xml->pods->pod[$pod]->rounds->round[$topCutStartRound]->matches->match[2]->player1['userid']);
-							$p4 = strval($xml->pods->pod[$pod]->rounds->round[$topCutStartRound]->matches->match[1]->player1['userid']);
-							$p5 = strval($xml->pods->pod[$pod]->rounds->round[$topCutStartRound]->matches->match[1]->player2['userid']);
-							$p6 = strval($xml->pods->pod[$pod]->rounds->round[$topCutStartRound]->matches->match[2]->player2['userid']);
-							$p7 = strval($xml->pods->pod[$pod]->rounds->round[$topCutStartRound]->matches->match[3]->player2['userid']);
-							$p8 = strval($xml->pods->pod[$pod]->rounds->round[$topCutStartRound]->matches->match[0]->player2['userid']);
+							$topcut_start_round = $$current_pod->rounds->round[$topCutStartRound];
+							$p1 = strval($topcut_start_round->matches->match[0]->player1['userid']);
+							$p2 = strval($topcut_start_round->matches->match[3]->player1['userid']);
+							$p3 = strval($topcut_start_round->matches->match[2]->player1['userid']);
+							$p4 = strval($topcut_start_round->matches->match[1]->player1['userid']);
+							$p5 = strval($topcut_start_round->matches->match[1]->player2['userid']);
+							$p6 = strval($topcut_start_round->matches->match[2]->player2['userid']);
+							$p7 = strval($topcut_start_round->matches->match[3]->player2['userid']);
+							$p8 = strval($topcut_start_round->matches->match[0]->player2['userid']);
 							
 							$p18 = '';
 							$p27 = '';
@@ -1021,49 +967,49 @@ if(isset($_POST['current']) || isset($_POST['archives']))
 							$p2736 = '';
 							
 							$p1status = "";
-							if($xml->pods->pod[$pod]->rounds->round[$topCutStartRound]->matches->match[0]['outcome'] == 1)
+							if($topcut_start_round->matches->match[0]['outcome'] == 1)
 							{
 								$p1status = " topcutWinner";
 								$p18 = $p1;
 							}
 							$p2status = "";
-							if($xml->pods->pod[$pod]->rounds->round[$topCutStartRound]->matches->match[3]['outcome'] == 1)
+							if($topcut_start_round->matches->match[3]['outcome'] == 1)
 							{
 								$p2status = " topcutWinner";
 								$p27 = $p2;
 							}
 							$p3status = "";
-							if($xml->pods->pod[$pod]->rounds->round[$topCutStartRound]->matches->match[2]['outcome'] == 1)
+							if($topcut_start_round->matches->match[2]['outcome'] == 1)
 							{
 								$p3status = " topcutWinner";
 								$p36 = $p3;
 							}
 							$p4status = "";
-							if($xml->pods->pod[$pod]->rounds->round[$topCutStartRound]->matches->match[1]['outcome'] == 1)
+							if($topcut_start_round->matches->match[1]['outcome'] == 1)
 							{
 								$p4status = " topcutWinner";
 								$p45 = $p4;
 							}
 							$p5status = "";
-							if($xml->pods->pod[$pod]->rounds->round[$topCutStartRound]->matches->match[1]['outcome'] == 2)
+							if($topcut_start_round->matches->match[1]['outcome'] == 2)
 							{
 								$p5status = " topcutWinner";
 								$p45 = $p5;
 							}
 							$p6status = "";
-							if($xml->pods->pod[$pod]->rounds->round[$topCutStartRound]->matches->match[2]['outcome'] == 2)
+							if($topcut_start_round->matches->match[2]['outcome'] == 2)
 							{
 								$p6status = " topcutWinner";
 								$p36 = $p6;
 							}
 							$p7status = "";
-							if($xml->pods->pod[$pod]->rounds->round[$topCutStartRound]->matches->match[3]['outcome'] == 2)
+							if($topcut_start_round->matches->match[3]['outcome'] == 2)
 							{
 								$p7status = " topcutWinner";
 								$p27 = $p7;
 							}
 							$p8status = "";
-							if($xml->pods->pod[$pod]->rounds->round[$topCutStartRound]->matches->match[0]['outcome'] == 2)
+							if($topcut_start_round->matches->match[0]['outcome'] == 2)
 							{
 								$p8status = " topcutWinner";
 								$p18 = $p8;
@@ -1304,18 +1250,19 @@ if(isset($_POST['current']) || isset($_POST['archives']))
 							$htmlData .= '<th style="width:5%">Pts</th>';
 						$htmlData .= '</tr>';
 					
-					$nbMatches = sizeof($xml->pods->pod[$pod]->rounds->round[$round]->matches->match);
-					$roundType = $xml->pods->pod[$pod]->rounds->round[$round]['type']; //1 : top cut
+					$nbMatches = sizeof($current_round->matches->match);
+					$roundType = $current_round['type']; //1 : top cut
 					if($startTopCut == 999 && $roundType == 1)
 						$startTopCut = $r;
 					for($m = 0; $m < $nbMatches; $m++)
 					{
-						$outcome = $xml->pods->pod[$pod]->rounds->round[$round]->matches->match[$m]['outcome'];
-						$player = strval($xml->pods->pod[$pod]->rounds->round[$round]->matches->match[$m]->player['userid']);
-						$player1 = strval($xml->pods->pod[$pod]->rounds->round[$round]->matches->match[$m]->player1['userid']);
-						$player2 = strval($xml->pods->pod[$pod]->rounds->round[$round]->matches->match[$m]->player2['userid']);
-						$ts = $xml->pods->pod[$pod]->rounds->round[$round]->matches->match[$m]->timestamp;
-						$table = $xml->pods->pod[$pod]->rounds->round[$round]->matches->match[$m]->tablenumber;
+						$current_match = $current_round->matches->match[$m];
+						$outcome = $current_match['outcome'];
+						$player = strval($current_match->player['userid']);
+						$player1 = strval($current_match->player1['userid']);
+						$player2 = strval($current_match->player2['userid']);
+						$ts = $current_match->timestamp;
+						$table = $current_match->tablenumber;
 						
 						$class = "none";
 						
