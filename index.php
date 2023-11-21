@@ -10,18 +10,28 @@ ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);*/
 
 $pageTitle = "TDF Viewer";
-$color1 = "#228B22";
-$color2 = "#20B2AA";
 $user_data = 'user_data.json';
+$json_user_data = [];
 if(file_exists($user_data))
 {
-	$jsonString = json_decode(file_get_contents($user_data), true);
-	if (array_key_exists("color1",$jsonString))
-	{
-		$color1 = $jsonString['color1'];
-		$color2 = $jsonString['color2'];
-	}
+	$json_user_data = json_decode(file_get_contents($user_data), true);
 }
+$color1 = $json_user_data['color1'] ?? "#228B22";
+$color2 = $json_user_data['color2'] ?? "#20B2AA";
+
+function save_league_data() 
+{
+	$fp = fopen($user_data, 'w');
+	fwrite($fp, json_encode($json_user_data, JSON_PRETTY_PRINT));
+	fclose($fp);
+}
+
+function set_boolean_data(key, value) 
+{
+	$json_user_data[key] = value ? "yes" : "no";
+	save_league_data();
+}
+
 class Player
 {
 	public $wins;
@@ -327,15 +337,7 @@ if(isset($_POST['admin']))
 			$htmlData .= '<p><button class="pushable" type="submit"><span class="front">Change Password</span></button></p>';
 			$htmlData .= '</form>';
 			
-			$lname = '';
-			if(file_exists($user_data))
-			{
-				$jsonData = json_decode(file_get_contents($user_data), true);
-				if (array_key_exists("leaguename",$jsonData))
-				{
-					$lname = $jsonData['leaguename'];
-				}
-			}
+			$lname = $json_user_data['leaguename'] ?? '';
 			
 			$htmlData .= '<form action="" method="post" id="name_form" class="adminforms">';
 			$htmlData .= '<input name="admin" value="" hidden>';
@@ -347,108 +349,34 @@ if(isset($_POST['admin']))
 			$resistances = False;
 			if(isset($_POST['resistances']))
 			{
-				if(file_exists($user_data))
-				{
-					$jsonData = json_decode(file_get_contents($user_data), true);
-				}
-				else
-				{
-					$jsonData = array();
-				}
-				$jsonData["resistances"] = 'No';
-				if($_POST['resistances'] == 'Yes')
-				{
-					$jsonData["resistances"] = 'Yes';
-					$resistances = True;
-				}
-				$fp = fopen($user_data, 'w');
-				fwrite($fp, json_encode($jsonData, JSON_PRETTY_PRINT));
-				fclose($fp);
+				$resistances = $_POST['resistances'] == 'Yes';
+				set_boolean_data("resistances", $resistances)
 			}
 			else
 			{
-				if(isset($_POST['hidden_res']))
-				{
-					if(file_exists($user_data))
-					{
-						$jsonData = json_decode(file_get_contents($user_data), true);
-					}
-					else
-					{
-						$jsonData = array();
-					}
-					$jsonData["resistances"] = 'No';
-					$fp = fopen($user_data, 'w');
-					fwrite($fp, json_encode($jsonData, JSON_PRETTY_PRINT));
-					fclose($fp);
+				if(isset($_POST['hidden_res'])) {
+					set_boolean_data("resistances", False);
 				}
-				else
+				else 
 				{
-					if(file_exists($user_data))
-					{
-						$jsonData = json_decode(file_get_contents($user_data), true);
-						if (array_key_exists("resistances",$jsonData))
-						{
-							if($jsonData['resistances'] == 'Yes')
-							{
-								$resistances = True;
-							}
-						}
-					}
+					$resistances = ($json_user_data["resistances"] ?? 'No' == 'Yes');
 				}
 			}
-			
+
 			$roundstanding = False;
 			if(isset($_POST['roundstanding']))
 			{
-				if(file_exists($path))
-				{
-					$jsonData = json_decode(file_get_contents($path), true);
-				}
-				else
-				{
-					$jsonData = array();
-				}
-				$jsonData["roundstanding"] = 'No';
-				if($_POST['roundstanding'] == 'Yes')
-				{
-					$jsonData["roundstanding"] = 'Yes';
-					$roundstanding = True;
-				}
-				$fp = fopen($user_data, 'w');
-				fwrite($fp, json_encode($jsonData, JSON_PRETTY_PRINT));
-				fclose($fp);
+				$roundstanding = $_POST['roundstanding'] == 'Yes';
+				set_boolean_data("roundstanding", $roundstanding)
 			}
 			else
 			{
-				if(isset($_POST['hidden_res']))
-				{
-					if(file_exists($user_data))
-					{
-						$jsonData = json_decode(file_get_contents($user_data), true);
-					}
-					else
-					{
-						$jsonData = array();
-					}
-					$jsonData["roundstanding"] = 'No';
-					$fp = fopen($user_data, 'w');
-					fwrite($fp, json_encode($jsonData, JSON_PRETTY_PRINT));
-					fclose($fp);
+				if(isset($_POST['hidden_res'])) {
+					set_boolean_data("roundstanding", False);
 				}
-				else
+				else 
 				{
-					if(file_exists($user_data))
-					{
-						$jsonData = json_decode(file_get_contents($user_data), true);
-						if (array_key_exists("roundstanding",$jsonData))
-						{
-							if($jsonData['roundstanding'] == 'Yes')
-							{
-								$roundstanding = True;
-							}
-						}
-					}
+					$roundstanding = ($json_user_data["roundstanding"] ?? 'No' == 'Yes');
 				}
 			}
 			
